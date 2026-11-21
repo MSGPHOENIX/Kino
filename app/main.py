@@ -1,5 +1,4 @@
 import os
-import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,7 +14,6 @@ from .auth import create_token, current_user, hash_password, verify_password
 from .db import engine, get_db
 from .models import AudioTrack, Base, Episode, Season, Title, User, WatchProgress, now
 
-INVITE_CODE = os.environ.get("INVITE_CODE", "")
 MEDIA_BASE_URL = os.environ.get("MEDIA_BASE_URL", "").rstrip("/")  # откуда отдаётся видео (например, адрес R2)
 COMPLETED_RATIO = 0.92  # серия считается просмотренной после 92%
 
@@ -39,10 +37,6 @@ class Credentials(BaseModel):
     password: str = Field(min_length=6, max_length=200)
 
 
-class RegisterIn(Credentials):
-    invite_code: str
-
-
 class ProgressIn(BaseModel):
     episode_id: int
     position_sec: float = Field(ge=0)
@@ -57,9 +51,7 @@ def health():
 
 
 @app.post("/auth/register")
-def register(data: RegisterIn, db: Session = Depends(get_db)):
-    if not INVITE_CODE or not secrets.compare_digest(data.invite_code, INVITE_CODE):
-        raise HTTPException(403, "Неверный инвайт-код")
+def register(data: Credentials, db: Session = Depends(get_db)):
     username = data.username.strip().lower()
     if db.scalar(select(User).where(User.username == username)):
         raise HTTPException(409, "Логин занят")
@@ -147,7 +139,7 @@ def continue_watching(user: User = Depends(current_user), db: Session = Depends(
 
 
 @app.get("/titles")
-def list_titles(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def list_titles(db: Session = Depends(get_db)):
     titles = db.scalars(select(Title).order_by(Title.name)).all()
     return [{"id": t.id, "name": t.name, "kind": t.kind, "poster_url": t.poster_url} for t in titles]
 

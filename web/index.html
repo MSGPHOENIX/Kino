@@ -155,13 +155,19 @@ window.addEventListener("hashchange", render);
 
 async function render() {
   stopPlayer();
-  if (!state.token) return viewAuth();
-  if (!state.user) {
-    try { state.user = await api("/me"); } catch { return viewAuth(); }
+  if (state.token && !state.user) {
+    try { state.user = await api("/me"); }
+    catch { state.token = null; localStorage.removeItem("kino_token"); }
   }
   const [page, id] = location.hash.slice(1).split("/");
-  if (page === "title" && id) return viewTitle(+id);
-  if (page === "watch" && id) return viewWatch(+id);
+  if (page === "login" || page === "register") {
+    if (state.user) return go("");
+    return viewAuth(page);
+  }
+  if ((page === "title" || page === "watch") && id) {
+    if (!state.user) { state.next = location.hash; return go("login"); }
+    return page === "title" ? viewTitle(+id) : viewWatch(+id);
+  }
   return viewHome();
 }
 
@@ -169,18 +175,20 @@ function shell(...content) {
   $app.replaceChildren(
     h("header", {},
       h("a", { class: "logo", href: "#", style: "text-decoration:none" }, "KINO"),
-      h("div", { class: "who" }, state.user ? state.user.username : "", h("button", { class: "link", onclick: logout }, "Выйти"))),
+      state.user
+        ? h("div", { class: "who" }, state.user.username, h("button", { class: "link", onclick: logout }, "Выйти"))
+        : h("div", { class: "who" },
+            h("button", { class: "link", onclick: () => go("login") }, "Вход"),
+            h("button", { class: "link", onclick: () => go("register") }, "Регистрация"))),
     h("main", {}, ...content));
 }
 
 // ====== Вход ======
-function viewAuth() {
-  let mode = "login";
+function viewAuth(startMode = "login") {
+  let mode = startMode;
   const msg = h("div", { class: "msg", "aria-live": "polite" });
   const user = h("input", { autocomplete: "username", required: true });
   const pass = h("input", { type: "password", autocomplete: "current-password", required: true });
-  const code = h("input", { autocomplete: "off" });
-  const codeBox = h("div", { hidden: true }, h("label", {}, "Слово-код"), code);
   const submit = h("button", { class: "btn", type: "submit" }, "Войти");
   const tabLogin = h("button", { type: "button", "aria-pressed": "true" }, "Вход");
   const tabReg = h("button", { type: "button", "aria-pressed": "false" }, "Регистрация");
@@ -188,7 +196,6 @@ function viewAuth() {
     mode = m;
     tabLogin.setAttribute("aria-pressed", m === "login");
     tabReg.setAttribute("aria-pressed", m === "register");
-    codeBox.hidden = m === "login";
     submit.textContent = m === "login" ? "Войти" : "Создать аккаунт";
     pass.autocomplete = m === "login" ? "current-password" : "new-password";
     msg.textContent = "";
@@ -202,10 +209,10 @@ function viewAuth() {
       submit.disabled = true; msg.className = "msg"; msg.textContent = "Проверяю…";
       try {
         const body = { username: user.value, password: pass.value };
-        if (mode === "register") body.invite_code = code.value;
         const r = await api(mode === "login" ? "/auth/login" : "/auth/register", { method: "POST", body, auth: false });
         state.token = r.token; localStorage.setItem("kino_token", r.token);
-        state.user = null; location.hash = ""; render();
+        state.user = null; const next = state.next || ""; state.next = null;
+        if (location.hash === "#" + next) render(); else location.hash = next;
       } catch (err) { msg.className = "msg err"; msg.textContent = err.message; }
       finally { submit.disabled = false; }
     }
@@ -213,18 +220,20 @@ function viewAuth() {
     h("div", { class: "tabs" }, tabLogin, tabReg),
     h("label", {}, "Логин (от 3 символов)"), user,
     h("label", {}, "Пароль (от 6 символов)"), pass,
-    codeBox, submit, msg);
+    submit, msg);
 
+  setMode(startMode);
   $app.replaceChildren(h("div", { class: "auth" },
     h("span", { class: "logo" }, "KINO"),
-    h("p", { class: "sub" }, "Личный кинотеатр. Вход только для своих."), form));
+    h("p", { class: "sub" }, "Личный кинотеатр"), form,
+    h("button", { class: "link", type: "button", onclick: () => go("") }, "← На главную")));
 }
 
 // ====== Главная ======
 async function viewHome() {
   const contBox = h("div"), grid = h("div", { class: "grid" }, h("div", { class: "note" }, "Загружаю каталог…"));
   shell(contBox, h("h2", {}, "Каталог"), grid);
-  api("/continue").then(list => {
+  if (state.user) api("/continue").then(list => {
     if (!list.length) return;
     contBox.append(h("h2", {}, "Продолжить просмотр"), h("div", { class: "row" }, list.map(c =>
       h("button", { class: "cont", onclick: () => go("watch/" + c.episode_id) },
@@ -232,7 +241,7 @@ async function viewHome() {
         h("div", { class: "bar" }, h("i", { style: `width:${c.duration_sec ? Math.min(100, c.position_sec / c.duration_sec * 100) : 0}%` }))))));
   }).catch(() => {});
   try {
-    const titles = await api("/titles");
+    const titles = await api("/titles", { auth: false });
     grid.replaceChildren(...(titles.length ? titles.map(t =>
       h("button", { class: "card", onclick: () => go("title/" + t.id) },
         h("div", { class: "poster", style: t.poster_url ? `background-image:url("${encodeURI(t.poster_url)}")` : "" }, t.poster_url ? "" : t.name),

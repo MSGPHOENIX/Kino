@@ -2,8 +2,8 @@
 
 1. **Neon**: создай проект, скопируй строку подключения (Connection string) → это `DATABASE_URL`.
 2. **GitHub**: в репозитории `my-cinema` нажми Add file → Upload files и загрузи всё содержимое этой папки (папка `app` тоже, с файлами внутри).
-3. **Render**: New → Blueprint → выбери репозиторий. Когда спросит, заполни `DATABASE_URL`, `INVITE_CODE` (придумай код) и `FRONTEND_ORIGIN` (пока можно `*`). `JWT_SECRET` создастся сам.
-4. Открой `https://<имя-сервиса>.onrender.com/docs`: там можно зарегистрироваться (`/auth/register`) и проверить API.
+3. **Render**: New → Blueprint → выбери репозиторий. Когда спросит, заполни `DATABASE_URL` и `FRONTEND_ORIGIN` (пока можно `*`). `JWT_SECRET` создастся сам.
+4. Открой `https://<имя-сервиса>.onrender.com/docs`: там можно зарегистрироваться (`/auth/register`, без кода, регистрация открыта) и проверить API.
 5. **cron-job.org**: добавь задачу, которая каждые 10 минут открывает `https://<имя-сервиса>.onrender.com/health`.
 
 ## Сайт (папка web)
