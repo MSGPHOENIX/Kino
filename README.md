@@ -7,7 +7,7 @@
 5. **cron-job.org**: добавь задачу, которая каждые 10 минут открывает `https://<имя-сервиса>.onrender.com/health`.
 
 ## Сайт (папка web)
-Файл `web/index.html` это готовый сайт. Cloudflare Pages → Upload assets → загрузи его. Адрес `*.pages.dev` вставь в `FRONTEND_ORIGIN` на Render.
+Файл `web/index.html` это готовый сайт. Сервер сам отдаёт его на главной странице: открой адрес сервиса на Render.
 
 ## Видео
 `MEDIA_BASE_URL` в Render: адрес хранилища, откуда отдаются потоки (`hls_path` серии добавляется к нему).

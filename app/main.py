@@ -1,9 +1,11 @@
 import os
 import secrets
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -203,3 +205,12 @@ def get_episode(episode_id: int, user: User = Depends(current_user), db: Session
         "audio_tracks": [{"id": a.id, "name": a.name, "language": a.language} for a in tracks],
         "next_episode_id": nxt.id if nxt else None,
     }
+
+
+# Сам сайт отдаётся с главной страницы сервера
+WEB_INDEX = Path(__file__).resolve().parent.parent / "web" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+def site():
+    return FileResponse(WEB_INDEX)
