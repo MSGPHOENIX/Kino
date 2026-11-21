@@ -29,9 +29,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="My Cinema API", lifespan=lifespan)
-app.include_router(admin_router)
 origins = [o.strip() for o in os.environ.get("FRONTEND_ORIGIN", "*").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
+app.include_router(admin_router)
 
 
 class Credentials(BaseModel):
@@ -157,7 +157,6 @@ def get_title(title_id: int, user: User = Depends(current_user), db: Session = D
         eps = db.scalars(select(Episode).where(Episode.season_id == s.id).order_by(Episode.number)).all()
         result.append(
             {
-                "id": s.id,
                 "number": s.number,
                 "episodes": [{"id": e.id, "number": e.number, "name": e.name, "status": e.status} for e in eps],
             }

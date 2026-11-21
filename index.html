@@ -13,7 +13,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);min-height:100%}
 body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-button,input{font:inherit;color:inherit}
+button,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .logo{font-family:Unbounded,sans-serif;font-weight:700;letter-spacing:.04em;color:var(--accent);font-size:1.25rem}
@@ -35,7 +35,7 @@ h1{font-family:Unbounded,sans-serif;font-weight:700;font-size:1.6rem;margin:6px 
 .tabs button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:9px}
 .tabs button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 label{display:block;font-size:.85rem;color:var(--dim);margin:12px 0 5px}
-input{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px}
+input,textarea{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px}
 .auth .btn{width:100%;margin-top:18px}
 .msg{min-height:1.3em;margin-top:12px;font-size:.9rem;color:var(--dim)}
 .msg.err{color:var(--bad)}
@@ -61,10 +61,16 @@ input{width:100%;background:var(--panel);border:1px solid var(--line);border-rad
 .ep:disabled{opacity:.45;cursor:not-allowed}
 .ep small{color:var(--dim)}
 /* админка */
-.adm{max-width:460px}
-.adm-ep{flex-wrap:wrap;gap:8px}
-.adm-ep input{flex:1 1 220px;width:auto}
-.adm-ep select{flex:0 0 auto}
+.adm-form{display:grid;gap:2px;max-width:520px}
+.adm-form .btn{justify-self:start;margin-top:16px}
+.adm-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.adm-head h2{margin-right:auto}
+.adm-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;gap:10px}
+.adm-card input,.adm-card select{background:var(--bg)}
+.adm-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.adm-line input,.adm-line select{width:auto}
+.adm-tracks{color:var(--dim);font-size:.9rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:3px 8px 3px 12px;color:var(--text)}
 /* плеер */
 .player{margin-top:14px}
 .panel{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
@@ -170,7 +176,8 @@ async function render() {
     return viewAuth(page);
   }
   if (page === "admin") {
-    if (!state.user || !state.user.is_admin) return go("");
+    if (!state.user) { state.next = location.hash; return go("login"); }
+    if (!state.user.is_admin) return shell(h("div", { class: "empty" }, "Нет доступа. Твой логин не указан в ADMIN_USERNAMES на сервере."));
     return id ? viewAdminTitle(+id) : viewAdmin();
   }
   if ((page === "title" || page === "watch") && id) {
@@ -257,95 +264,8 @@ async function viewHome() {
       h("button", { class: "card", onclick: () => go("title/" + t.id) },
         h("div", { class: "poster", style: t.poster_url ? `background-image:url("${encodeURI(t.poster_url)}")` : "" }, t.poster_url ? "" : t.name),
         h("div", { class: "name" }, t.name))) :
-      [h("div", { class: "empty", style: "grid-column:1/-1" }, "Каталог пока пуст. Добавь первый сериал на сервере, и он появится здесь.")]));
+      [h("div", { class: "empty", style: "grid-column:1/-1" }, state.user && state.user.is_admin ? "Каталог пока пуст. Добавь первый фильм или сериал в админке." : "Каталог пока пуст.")]));
   } catch (e) { grid.replaceChildren(h("div", { class: "msg err" }, e.message)); }
-}
-
-// ====== Админка ======
-const field = (label, input) => h("div", {}, h("label", {}, label), input);
-async function adminDo(fn, after) {
-  try { await fn(); if (after) after(); } catch (e) { toast(e.message); }
-}
-
-async function viewAdmin() {
-  shell(h("div", { class: "note" }, "Загружаю…"));
-  let titles;
-  try { titles = await api("/titles", { auth: false }); } catch (e) { return shell(h("div", { class: "msg err" }, e.message)); }
-  const name = h("input", { required: true, maxlength: 200 });
-  const kind = h("select", {}, h("option", { value: "series" }, "Сериал"), h("option", { value: "movie" }, "Фильм"));
-  const poster = h("input", { placeholder: "https://… (необязательно)" });
-  const desc = h("input", { maxlength: 2000 });
-  const form = h("form", {
-    class: "adm",
-    onsubmit: ev => {
-      ev.preventDefault();
-      adminDo(async () => {
-        const t = await api("/admin/titles", { method: "POST", body: { name: name.value, kind: kind.value, poster_url: poster.value || null, description: desc.value || null } });
-        go("admin/" + t.id);
-      });
-    }
-  },
-    field("Название", name), field("Тип", kind), field("Ссылка на постер", poster), field("Описание", desc),
-    h("button", { class: "btn", type: "submit", style: "margin-top:16px" }, "Добавить"));
-  shell(
-    h("button", { class: "link", onclick: () => go("") }, "← Каталог"),
-    h("h1", {}, "Админка"),
-    h("h2", {}, "Добавить в каталог"), form,
-    h("h2", {}, "Уже в каталоге"),
-    h("div", { class: "eps" }, titles.length
-      ? titles.map(t => h("button", { class: "ep", onclick: () => go("admin/" + t.id) }, h("span", {}, t.name), h("small", {}, "Изменить")))
-      : h("div", { class: "empty" }, "Пока пусто")));
-}
-
-function adminEpisode(e, reload) {
-  const path = h("input", { value: e.hls_path || "", placeholder: "путь к .m3u8 в хранилище" });
-  const status = h("select", {}, ...[["not_ready", "Не готова"], ["preparing", "Готовится"], ["ready", "Готова"]].map(([v, l]) => h("option", { value: v }, l)));
-  status.value = e.status;
-  return h("div", { class: "ep adm-ep" },
-    h("b", {}, `${e.number}. ${e.name || "Серия " + e.number}`),
-    path, status,
-    h("button", { class: "btn ghost", onclick: () => adminDo(() => api("/admin/episodes/" + e.id, { method: "PUT", body: { hls_path: path.value || null, status: status.value } }), () => toast("Сохранено")) }, "Сохранить"),
-    h("button", { class: "link", onclick: () => confirm("Удалить серию?") && adminDo(() => api("/admin/episodes/" + e.id, { method: "DELETE" }), reload) }, "удалить"));
-}
-
-async function viewAdminTitle(id) {
-  shell(h("div", { class: "note" }, "Загружаю…"));
-  let t;
-  try { t = await api("/admin/titles/" + id); } catch (e) { return shell(h("div", { class: "msg err" }, e.message)); }
-  const reload = () => viewAdminTitle(id);
-  const name = h("input", { required: true, maxlength: 200, value: t.name });
-  const poster = h("input", { value: t.poster_url || "", placeholder: "https://…" });
-  const desc = h("input", { maxlength: 2000, value: t.description || "" });
-  const form = h("form", {
-    class: "adm",
-    onsubmit: ev => {
-      ev.preventDefault();
-      adminDo(() => api("/admin/titles/" + id, { method: "PUT", body: { name: name.value, poster_url: poster.value || null, description: desc.value || null } }), () => toast("Сохранено"));
-    }
-  },
-    field("Название", name), field("Ссылка на постер", poster), field("Описание", desc),
-    h("button", { class: "btn", type: "submit", style: "margin-top:16px" }, "Сохранить"));
-
-  const seasons = t.seasons.map(s => {
-    const epNum = h("input", { type: "number", min: 1, value: (s.episodes.length ? s.episodes[s.episodes.length - 1].number : 0) + 1, style: "width:90px" });
-    const epName = h("input", { placeholder: "Название серии (необязательно)", style: "flex:1 1 200px;width:auto" });
-    return h("section", { class: "season" },
-      h("h2", {}, `Сезон ${s.number} `, h("button", { class: "link", onclick: () => confirm("Удалить сезон со всеми сериями?") && adminDo(() => api("/admin/seasons/" + s.id, { method: "DELETE" }), reload) }, "удалить сезон")),
-      h("div", { class: "eps" }, s.episodes.map(e => adminEpisode(e, reload))),
-      h("div", { class: "panel" }, epNum, epName,
-        h("button", { class: "btn ghost", onclick: () => adminDo(() => api(`/admin/seasons/${s.id}/episodes`, { method: "POST", body: { number: +epNum.value, name: epName.value || null } }), reload) }, "+ Серия")));
-  });
-
-  const seasonNum = h("input", { type: "number", min: 1, value: (t.seasons.length ? t.seasons[t.seasons.length - 1].number : 0) + 1, style: "width:90px" });
-  shell(
-    h("button", { class: "link", onclick: () => go("admin") }, "← Админка"),
-    h("h1", {}, t.name),
-    form,
-    seasons,
-    h("div", { class: "panel", style: "margin-top:24px" }, seasonNum,
-      h("button", { class: "btn ghost", onclick: () => adminDo(() => api(`/admin/titles/${id}/seasons`, { method: "POST", body: { number: +seasonNum.value } }), reload) }, "+ Сезон")),
-    h("div", { style: "margin-top:40px" },
-      h("button", { class: "link", onclick: () => confirm(`Удалить «${t.name}» целиком?`) && adminDo(() => api("/admin/titles/" + id, { method: "DELETE" }), () => go("admin")) }, "Удалить весь тайтл")));
 }
 
 // ====== Сериал ======
@@ -365,6 +285,113 @@ async function viewTitle(id) {
             h("small", {}, ready ? "Смотреть" : "Готовится"));
         })))) : h("div", { class: "empty" }, "Серий пока нет."));
   } catch (e) { shell(h("div", { class: "msg err" }, e.message)); }
+}
+
+// ====== Админка ======
+async function viewAdmin() {
+  shell(h("div", { class: "note" }, "Загружаю…"));
+  let titles;
+  try { titles = await api("/admin/titles"); }
+  catch (e) { return shell(h("div", { class: "msg err" }, e.message)); }
+  const name = h("input", { required: true, maxlength: 200, autocomplete: "off" });
+  const kind = sel([["series", "Сериал"], ["movie", "Фильм"]], "series", () => {}, "Тип");
+  const poster = h("input", { placeholder: "Ссылка на картинку, можно оставить пустым", autocomplete: "off" });
+  const desc = h("textarea", { rows: 3, maxlength: 2000 });
+  const form = h("form", {
+    class: "adm-form",
+    onsubmit: async e => {
+      e.preventDefault();
+      try {
+        const t = await api("/admin/titles", { method: "POST", body: { name: name.value, kind: kind.value, poster_url: poster.value, description: desc.value } });
+        go("admin/" + t.id);
+      } catch (err) { toast(err.message); }
+    }
+  },
+    h("label", {}, "Название"), name,
+    h("label", {}, "Тип"), kind,
+    h("label", {}, "Постер (ссылка)"), poster,
+    h("label", {}, "Описание"), desc,
+    h("button", { class: "btn", type: "submit" }, "Добавить"));
+  shell(
+    h("h1", {}, "Админка"),
+    h("h2", {}, "Каталог"),
+    titles.length
+      ? h("div", { class: "eps" }, titles.map(t =>
+          h("button", { class: "ep", onclick: () => go("admin/" + t.id) },
+            h("span", {}, t.name),
+            h("small", {}, `${t.kind === "movie" ? "Фильм" : "Сериал"} · готово ${t.ready} из ${t.episodes}`))))
+      : h("div", { class: "empty" }, "Пока ничего нет. Добавь первый фильм или сериал ниже."),
+    h("h2", {}, "Новый фильм или сериал"), form);
+}
+
+async function viewAdminTitle(id) {
+  shell(h("div", { class: "note" }, "Загружаю…"));
+  let t;
+  try { t = await api("/admin/titles/" + id); }
+  catch (e) { return shell(h("button", { class: "link", onclick: () => go("admin") }, "← Админка"), h("div", { class: "msg err" }, e.message)); }
+
+  // reload=true перерисовывает страницу (после добавления и удаления); при простом сохранении не трогаем остальные поля
+  const run = async (fn, okText, reload = true) => {
+    try { await fn(); if (okText) toast(okText); if (reload) await viewAdminTitle(id); }
+    catch (e) { toast(e.message); }
+  };
+  const call = (path, method, body) => api("/admin" + path, { method, body });
+
+  const name = h("input", { value: t.name, required: true, maxlength: 200 });
+  const kind = sel([["series", "Сериал"], ["movie", "Фильм"]], t.kind, () => {}, "Тип");
+  const poster = h("input", { value: t.poster_url || "", placeholder: "Ссылка на картинку" });
+  const desc = h("textarea", { rows: 3, maxlength: 2000 }, t.description || "");
+  const titleCard = h("div", { class: "adm-card" },
+    h("label", {}, "Название"), name,
+    h("label", {}, "Тип"), kind,
+    h("label", {}, "Постер (ссылка)"), poster,
+    h("label", {}, "Описание"), desc,
+    h("div", { class: "adm-line" },
+      h("button", { class: "btn", onclick: () => run(() => call("/titles/" + id, "PUT", { name: name.value, kind: kind.value, poster_url: poster.value, description: desc.value }), "Сохранено", false) }, "Сохранить"),
+      h("button", { class: "btn ghost", onclick: async () => {
+        if (!confirm(`Удалить «${t.name}» вместе со всеми сезонами и сериями?`)) return;
+        try { await call("/titles/" + id, "DELETE"); go("admin"); } catch (e) { toast(e.message); }
+      } }, "Удалить целиком")));
+
+  const episodeCard = e => {
+    const num = h("input", { type: "number", min: 1, value: e.number, "aria-label": "Номер серии", style: "flex:0 0 76px" });
+    const nm = h("input", { value: e.name || "", placeholder: "Название (необязательно)", maxlength: 200, style: "flex:1 1 180px" });
+    const path = h("input", { value: e.hls_path || "", placeholder: "Путь к .m3u8 в хранилище", style: "flex:2 1 240px" });
+    const st = sel([["not_ready", "Не готова"], ["preparing", "Готовится"], ["ready", "Готова"]], e.status, () => {}, "Статус");
+    const voice = h("input", { placeholder: "Новая озвучка", maxlength: 100, style: "flex:0 1 160px" });
+    return h("div", { class: "adm-card" },
+      h("div", { class: "adm-line" }, num, nm, path, st),
+      h("div", { class: "adm-tracks" }, "Озвучки:",
+        e.audio.length
+          ? e.audio.map(a => h("span", { class: "chip" }, a.name,
+              h("button", { class: "link", "aria-label": "Удалить озвучку " + a.name, onclick: () => run(() => call("/audio/" + a.id, "DELETE")) }, "×")))
+          : "нет",
+        voice,
+        h("button", { class: "btn ghost", onclick: () => voice.value.trim() ? run(() => call(`/episodes/${e.id}/audio`, "POST", { name: voice.value }), "Озвучка добавлена") : toast("Впиши название озвучки") }, "Добавить")),
+      h("div", { class: "adm-line" },
+        h("button", { class: "btn", onclick: () => run(() => call("/episodes/" + e.id, "PUT", { number: +num.value, name: nm.value, hls_path: path.value, status: st.value }), "Сохранено", false) }, "Сохранить серию"),
+        h("button", { class: "link", onclick: () => confirm(`Удалить серию ${e.number}?`) && run(() => call("/episodes/" + e.id, "DELETE")) }, "Удалить серию")));
+  };
+
+  const seasonBlock = s => {
+    const voice = h("input", { placeholder: "Озвучка для всех серий сезона", maxlength: 100, style: "flex:1 1 220px" });
+    return h("section", { class: "season" },
+      h("div", { class: "adm-head" },
+        h("h2", {}, `Сезон ${s.number}`),
+        h("button", { class: "btn ghost", onclick: () => run(() => call(`/seasons/${s.id}/episodes`, "POST", {})) }, "+ Серия"),
+        h("button", { class: "link", onclick: () => confirm(`Удалить сезон ${s.number} со всеми сериями?`) && run(() => call("/seasons/" + s.id, "DELETE")) }, "Удалить сезон")),
+      h("div", { class: "adm-line", style: "margin-top:10px" }, voice,
+        h("button", { class: "btn ghost", onclick: () => voice.value.trim() ? run(() => call(`/seasons/${s.id}/audio`, "POST", { name: voice.value }), "Озвучка добавлена"): toast("Впиши название озвучки") }, "Добавить всем сериям")),
+      h("div", { class: "eps" }, s.episodes.length ? s.episodes.map(episodeCard) : h("div", { class: "empty" }, "Серий пока нет. Нажми «+ Серия».")));
+  };
+
+  shell(
+    h("button", { class: "link", onclick: () => go("admin") }, "← Админка"),
+    h("h1", {}, t.name),
+    titleCard,
+    t.seasons.map(seasonBlock),
+    h("div", { style: "margin-top:24px" }, h("button", { class: "btn", onclick: () => run(() => call(`/titles/${id}/seasons`, "POST", {})) }, "+ Сезон")),
+    h("p", { class: "note" }, "Путь к .m3u8 заполняется автоматически, когда будет настроена загрузка видео. Статус «Готова» включает кнопку «Смотреть»."));
 }
 
 // ====== Плеер ======
