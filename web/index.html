@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e141b;--panel:#16202b;--line:#26333f;--text:#e9eef3;--dim:#8b9aa8;--accent:#f0b34a;--accent-ink:#2a1b00;--bad:#ff7a6b;
+--r:10px;font-family:Manrope,system-ui,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);min-height:100%}
+body{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.logo{font-family:Unbounded,sans-serif;font-weight:700;letter-spacing:.04em;color:var(--accent);font-size:1.25rem}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+header .who{color:var(--dim);font-size:.9rem;display:flex;gap:14px;align-items:center}
+.link{background:none;border:0;color:var(--dim);text-decoration:underline;padding:0}
+.link:hover{color:var(--text)}
+main{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+h2{font-family:Unbounded,sans-serif;font-weight:500;font-size:1.05rem;margin:32px 0 14px}
+h1{font-family:Unbounded,sans-serif;font-weight:700;font-size:1.6rem;margin:6px 0 10px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:var(--r);padding:11px 18px;font-weight:700}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+/* вход */
+.auth{max-width:380px;margin:12vh auto 0;padding:0 20px}
+.auth .logo{font-size:2rem;display:block;margin-bottom:6px}
+.auth p.sub{color:var(--dim);margin:0 0 22px}
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tabs button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:9px}
+.tabs button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+label{display:block;font-size:.85rem;color:var(--dim);margin:12px 0 5px}
+input{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px}
+.auth .btn{width:100%;margin-top:18px}
+.msg{min-height:1.3em;margin-top:12px;font-size:.9rem;color:var(--dim)}
+.msg.err{color:var(--bad)}
+/* каталог */
+.row{display:flex;gap:14px;overflow-x:auto;padding-bottom:8px}
+.cont{flex:0 0 250px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;text-align:left}
+.cont b{display:block;margin-bottom:2px}
+.cont span{color:var(--dim);font-size:.85rem}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}
+.card{background:none;border:0;padding:0;text-align:left}
+.poster{aspect-ratio:2/3;border-radius:var(--r);background:var(--panel) center/cover;border:1px solid var(--line);display:flex;align-items:flex-end;padding:10px;font-family:Unbounded,sans-serif;font-size:.85rem;overflow:hidden}
+.card:hover .poster{border-color:var(--accent)}
+.card .name{margin-top:8px;font-weight:500}
+.empty{color:var(--dim);border:1px dashed var(--line);border-radius:var(--r);padding:28px;text-align:center}
+/* сериал */
+.desc{color:var(--dim);max-width:70ch;line-height:1.55}
+.season{margin-top:22px}
+.eps{display:grid;gap:8px;margin-top:10px}
+.ep{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;text-align:left}
+.ep:hover:not(:disabled){border-color:var(--accent)}
+.ep:disabled{opacity:.45;cursor:not-allowed}
+.ep small{color:var(--dim)}
+/* плеер */
+.player{margin-top:14px}
+.panel{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+select{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:9px 10px;color:var(--text);font:inherit;max-width:100%}
+.ptitle{font-family:Unbounded,sans-serif;font-size:1rem;margin:0 0 4px}
+video{width:100%;max-height:72vh;background:#000;border-radius:var(--r)}
+.note{color:var(--dim);margin:10px 0}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 16px;font-size:.9rem;z-index:9}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ====== Настройки ======
+const API = "https://kino-rlc7.onrender.com";
+
+// ====== Помощники ======
+const $app = document.getElementById("app");
+const state = { token: localStorage.getItem("kino_token"), user: null };
+const h = (tag, props = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null) el.append(kid.nodeType ? kid : document.createTextNode(kid));
+  return el;
+};
+const fmt = s => { s = Math.floor(s || 0); const m = Math.floor(s / 60), r = s % 60; return `${m}:${String(r).padStart(2, "0")}`; };
+function toast(text) {
+  const t = h("div", { class: "toast", role: "status" }, text);
+  document.body.append(t); setTimeout(() => t.remove(), 3500);
+}
+
+async function api(path, { method = "GET", body, auth = true } = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth && state.token) headers.Authorization = "Bearer " + state.token;
+  // Бесплатный сервер может просыпаться до минуты
+  const slow = setTimeout(() => toast("Сервер просыпается, подожди до минуты…"), 4000);
+  try {
+    const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    if (res.status === 401 && auth) { logout(); throw new Error("Нужно войти заново"); }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Ошибка " + res.status);
+    return data;
+  } catch (e) {
+    if (e instanceof TypeError) throw new Error("Нет связи с сервером");
+    throw e;
+  } finally { clearTimeout(slow); }
+}
+
+function logout() {
+  localStorage.removeItem("kino_token");
+  state.token = null; state.user = null;
+  go("");
+}
+
+// ====== Маршруты (hash) ======
+function go(hash) { location.hash = hash; if (!hash) render(); }
+window.addEventListener("hashchange", render);
+
+async function render() {
+  stopPlayer();
+  if (!state.token) return viewAuth();
+  if (!state.user) {
+    try { state.user = await api("/me"); } catch { return viewAuth(); }
+  }
+  const [page, id] = location.hash.slice(1).split("/");
+  if (page === "title" && id) return viewTitle(+id);
+  if (page === "watch" && id) return viewWatch(+id);
+  return viewHome();
+}
+
+function shell(...content) {
+  $app.replaceChildren(
+    h("header", {},
+      h("a", { class: "logo", href: "#", style: "text-decoration:none" }, "KINO"),
+      h("div", { class: "who" }, state.user ? state.user.username : "", h("button", { class: "link", onclick: logout }, "Выйти"))),
+    h("main", {}, ...content));
+}
+
+// ====== Вход ======
+function viewAuth() {
+  let mode = "login";
+  const msg = h("div", { class: "msg", "aria-live": "polite" });
+  const user = h("input", { autocomplete: "username", required: true });
+  const pass = h("input", { type: "password", autocomplete: "current-password", required: true });
+  const code = h("input", { autocomplete: "off" });
+  const codeBox = h("div", { hidden: true }, h("label", {}, "Слово-код"), code);
+  const submit = h("button", { class: "btn", type: "submit" }, "Войти");
+  const tabLogin = h("button", { type: "button", "aria-pressed": "true" }, "Вход");
+  const tabReg = h("button", { type: "button", "aria-pressed": "false" }, "Регистрация");
+  const setMode = m => {
+    mode = m;
+    tabLogin.setAttribute("aria-pressed", m === "login");
+    tabReg.setAttribute("aria-pressed", m === "register");
+    codeBox.hidden = m === "login";
+    submit.textContent = m === "login" ? "Войти" : "Создать аккаунт";
+    pass.autocomplete = m === "login" ? "current-password" : "new-password";
+    msg.textContent = "";
+  };
+  tabLogin.onclick = () => setMode("login");
+  tabReg.onclick = () => setMode("register");
+
+  const form = h("form", {
+    onsubmit: async e => {
+      e.preventDefault();
+      submit.disabled = true; msg.className = "msg"; msg.textContent = "Проверяю…";
+      try {
+        const body = { username: user.value, password: pass.value };
+        if (mode === "register") body.invite_code = code.value;
+        const r = await api(mode === "login" ? "/auth/login" : "/auth/register", { method: "POST", body, auth: false });
+        state.token = r.token; localStorage.setItem("kino_token", r.token);
+        state.user = null; location.hash = ""; render();
+      } catch (err) { msg.className = "msg err"; msg.textContent = err.message; }
+      finally { submit.disabled = false; }
+    }
+  },
+    h("div", { class: "tabs" }, tabLogin, tabReg),
+    h("label", {}, "Логин (от 3 символов)"), user,
+    h("label", {}, "Пароль (от 6 символов)"), pass,
+    codeBox, submit, msg);
+
+  $app.replaceChildren(h("div", { class: "auth" },
+    h("span", { class: "logo" }, "KINO"),
+    h("p", { class: "sub" }, "Личный кинотеатр. Вход только для своих."), form));
+}
+
+// ====== Главная ======
+async function viewHome() {
+  const contBox = h("div"), grid = h("div", { class: "grid" }, h("div", { class: "note" }, "Загружаю каталог…"));
+  shell(contBox, h("h2", {}, "Каталог"), grid);
+  api("/continue").then(list => {
+    if (!list.length) return;
+    contBox.append(h("h2", {}, "Продолжить просмотр"), h("div", { class: "row" }, list.map(c =>
+      h("button", { class: "cont", onclick: () => go("watch/" + c.episode_id) },
+        h("b", {}, c.title), h("span", {}, `Сезон ${c.season}, серия ${c.episode} · с ${fmt(c.position_sec)}`),
+        h("div", { class: "bar" }, h("i", { style: `width:${c.duration_sec ? Math.min(100, c.position_sec / c.duration_sec * 100) : 0}%` }))))));
+  }).catch(() => {});
+  try {
+    const titles = await api("/titles");
+    grid.replaceChildren(...(titles.length ? titles.map(t =>
+      h("button", { class: "card", onclick: () => go("title/" + t.id) },
+        h("div", { class: "poster", style: t.poster_url ? `background-image:url("${encodeURI(t.poster_url)}")` : "" }, t.poster_url ? "" : t.name),
+        h("div", { class: "name" }, t.name))) :
+      [h("div", { class: "empty", style: "grid-column:1/-1" }, "Каталог пока пуст. Добавь первый сериал на сервере, и он появится здесь.")]));
+  } catch (e) { grid.replaceChildren(h("div", { class: "msg err" }, e.message)); }
+}
+
+// ====== Сериал ======
+async function viewTitle(id) {
+  shell(h("div", { class: "note" }, "Загружаю…"));
+  try {
+    const t = await api("/titles/" + id);
+    shell(
+      h("button", { class: "link", onclick: () => go("") }, "← Каталог"),
+      h("h1", {}, t.name), t.description ? h("p", { class: "desc" }, t.description) : null,
+      t.seasons.length ? t.seasons.map(s => h("section", { class: "season" },
+        h("h2", {}, `Сезон ${s.number}`),
+        h("div", { class: "eps" }, s.episodes.map(e => {
+          const ready = e.status === "ready";
+          return h("button", { class: "ep", disabled: !ready, onclick: () => go("watch/" + e.id) },
+            h("span", {}, `${e.number}. ${e.name || "Серия " + e.number}`),
+            h("small", {}, ready ? "Смотреть" : "Готовится"));
+        })))) : h("div", { class: "empty" }, "Серий пока нет."));
+  } catch (e) { shell(h("div", { class: "msg err" }, e.message)); }
+}
+
+// ====== Плеер ======
+let video = null, hls = null, saveTimer = null, currentEp = null;
+function stopPlayer() {
+  if (video) saveProgress(true);
+  clearInterval(saveTimer); saveTimer = null;
+  if (hls) { hls.destroy(); hls = null; }
+  video = null;
+}
+function saveProgress(final = false) {
+  if (!video || !currentEp || !video.duration || (!final && video.paused)) return;
+  api("/progress", { method: "PUT", body: { episode_id: currentEp, position_sec: video.currentTime, duration_sec: video.duration } }).catch(() => {});
+}
+function loadHls() {
+  return new Promise((ok, fail) => {
+    if (window.Hls) return ok();
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js";
+    s.onload = ok; s.onerror = fail; document.head.append(s);
+  });
+}
+const sel = (opts, value, onchange, label) =>
+  h("select", { "aria-label": label, onchange: e => onchange(e.target.value) },
+    opts.map(([v, text]) => h("option", { value: v, selected: String(v) === String(value) }, text)));
+
+async function viewWatch(id) {
+  currentEp = id;
+  const box = h("div", { class: "player" }, h("div", { class: "note" }, "Загружаю…"));
+  shell(h("button", { class: "link", onclick: () => go("") }, "← Каталог"), box);
+  try {
+    const [ep, p] = await Promise.all([api("/episodes/" + id), api("/progress/" + id)]);
+    const title = await api("/titles/" + ep.title_id);
+    const label = h("div", {}, h("p", { class: "ptitle" }, ep.title), h("span", { class: "note" }, `Сезон ${ep.season}, серия ${ep.episode}` + (ep.name ? ` · ${ep.name}` : "")));
+    if (!ep.hls_url) {
+      box.replaceChildren(label, h("div", { class: "empty", style: "margin-top:12px" }, "У этой серии пока нет видео."));
+      return;
+    }
+    video = h("video", { controls: true, playsinline: true });
+    const panel = h("div", { class: "panel" });
+    box.replaceChildren(label, video, panel);
+
+    // Сезон и серия
+    const season = title.seasons.find(s => s.number === ep.season);
+    const readyEps = e => e.status === "ready";
+    panel.append(
+      sel(title.seasons.map(s => [s.number, "Сезон " + s.number]), ep.season, n => {
+        const first = title.seasons.find(s => s.number === +n).episodes.find(readyEps);
+        if (first) go("watch/" + first.id); else toast("В этом сезоне пока нет готовых серий");
+      }, "Сезон"),
+      sel(season.episodes.filter(readyEps).map(e => [e.id, `Серия ${e.number}`]), id, v => go("watch/" + v), "Серия"));
+    if (ep.next_episode_id) panel.append(h("button", { class: "btn ghost", onclick: () => go("watch/" + ep.next_episode_id) }, "Следующая серия"));
+
+    const src = ep.hls_url;
+    if (src.endsWith(".m3u8") && !video.canPlayType("application/vnd.apple.mpegurl")) {
+      await loadHls();
+      hls = new Hls(); hls.loadSource(src); hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        // Качество
+        if (hls.levels.length > 1) panel.append(sel(
+          [[-1, "Качество: авто"], ...hls.levels.map((l, i) => [i, l.height ? l.height + "p" : "уровень " + (i + 1)])],
+          -1, v => { hls.currentLevel = +v; }, "Качество"));
+        // Озвучка: из самого потока, иначе из базы
+        if (hls.audioTracks.length > 1) panel.append(sel(
+          hls.audioTracks.map((t, i) => [i, t.name || t.lang || "Дорожка " + (i + 1)]),
+          hls.audioTrack, v => { hls.audioTrack = +v; }, "Озвучка"));
+      });
+    } else video.src = src;
+
+    video.addEventListener("loadedmetadata", () => {
+      if (p.status === "watching" && p.position_sec > 5) video.currentTime = p.position_sec;
+    });
+    video.addEventListener("pause", () => saveProgress(true));
+    video.addEventListener("ended", () => { saveProgress(true); if (ep.next_episode_id) go("watch/" + ep.next_episode_id); });
+    saveTimer = setInterval(() => saveProgress(), 10000);
+  } catch (e) { box.replaceChildren(h("div", { class: "msg err" }, e.message)); }
+}
+
+render();
+</script>
+</body>
+</html>

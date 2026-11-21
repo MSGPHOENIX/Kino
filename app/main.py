@@ -11,9 +11,10 @@ from sqlalchemy.orm import Session
 
 from .auth import create_token, current_user, hash_password, verify_password
 from .db import engine, get_db
-from .models import Base, Episode, Season, Title, User, WatchProgress, now
+from .models import AudioTrack, Base, Episode, Season, Title, User, WatchProgress, now
 
 INVITE_CODE = os.environ.get("INVITE_CODE", "")
+MEDIA_BASE_URL = os.environ.get("MEDIA_BASE_URL", "").rstrip("/")  # откуда отдаётся видео (например, адрес R2)
 COMPLETED_RATIO = 0.92  # серия считается просмотренной после 92%
 
 
@@ -165,3 +166,40 @@ def get_title(title_id: int, user: User = Depends(current_user), db: Session = D
             }
         )
     return {"id": t.id, "name": t.name, "kind": t.kind, "description": t.description, "seasons": result}
+
+
+@app.get("/episodes/{episode_id}")
+def get_episode(episode_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    e = db.get(Episode, episode_id)
+    if e is None:
+        raise HTTPException(404, "Серия не найдена")
+    s = db.get(Season, e.season_id)
+    t = db.get(Title, s.title_id)
+    # следующая серия: в этом сезоне, иначе первая готовая в следующих сезонах
+    nxt = db.scalar(
+        select(Episode)
+        .where(Episode.season_id == s.id, Episode.number > e.number, Episode.status == "ready")
+        .order_by(Episode.number)
+        .limit(1)
+    )
+    if nxt is None:
+        nxt = db.scalar(
+            select(Episode)
+            .join(Season, Episode.season_id == Season.id)
+            .where(Season.title_id == t.id, Season.number > s.number, Episode.status == "ready")
+            .order_by(Season.number, Episode.number)
+            .limit(1)
+        )
+    tracks = db.scalars(select(AudioTrack).where(AudioTrack.episode_id == e.id).order_by(AudioTrack.id)).all()
+    ready = e.status == "ready" and e.hls_path and MEDIA_BASE_URL
+    return {
+        "id": e.id,
+        "title_id": t.id,
+        "title": t.name,
+        "season": s.number,
+        "episode": e.number,
+        "name": e.name,
+        "hls_url": f"{MEDIA_BASE_URL}/{e.hls_path.lstrip('/')}" if ready else None,
+        "audio_tracks": [{"id": a.id, "name": a.name, "language": a.language} for a in tracks],
+        "next_episode_id": nxt.id if nxt else None,
+    }
